@@ -1,5 +1,6 @@
 extends Control
 
+const Story = preload("res://story.gd")
 const GOLD := Color("#ffbc69")
 var intro := Control.new()
 var screen := Control.new()
@@ -44,13 +45,18 @@ func _ready():
 	screen.add_child(actions)
 	actions.position = Vector2(52,295)
 	actions.add_theme_constant_override("separation",9)
-	start_button = choice("Начать историю",func(): get_tree().change_scene_to_file("res://city.tscn"))
+	var saved := Story.read_chapter()
+	var launch := func():
+		if saved==4:
+			Story.save_chapter(0)
+		get_tree().change_scene_to_file("res://city.tscn")
+	start_button = choice("Продолжить · глава %d" % (saved+1) if saved in [1,2,3] else ("Пройти заново" if saved==4 else "Начать историю"),launch)
 	choice("Управление",func(): details.text = "WASD / стрелки — движение   ·   Пробел — тормоз\nEsc — пауза   ·   R — начать миссию заново")
 	choice("Во весь экран",func(): DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN))
 	choice("Выйти",func(): get_tree().quit())
 	screen.add_child(details)
 	details.position = Vector2(53,545)
-	details.text = "Забери Рэя у прачечной."
+	details.text = "Четыре главы   ·   Автосохранение между главами"
 	fill(self,intro)
 	var black := ColorRect.new()
 	black.color = Color("#080d15")

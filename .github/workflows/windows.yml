@@ -25,7 +25,30 @@ jobs:
           test -s build/LakeCity.exe
       - name: Capture menu and mission
         run: xvfb-run -a /tmp/editor/Godot* --audio-driver Dummy --script res://qa/capture.gd
-      - name: Publish downloadable executable
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lake-city
+          path: build/
+  windows:
+    runs-on: windows-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: lake-city
+          path: build
+      - name: Boot packaged game and play both endings
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path build/LakeCity.exe).Path
+          $intro = Start-Process $exe -ArgumentList '--headless --fixed-fps 60 --quit-after 190 --log-file intro.log' -PassThru -Wait
+          if ($intro.ExitCode -ne 0) { throw "Startup failed" }
+          $story = Start-Process $exe -ArgumentList '--headless --log-file campaign.log --script res://qa/campaign.gd' -PassThru -Wait
+          $log = Get-Content campaign.log -Raw
+          Write-Output $log
+          if ($story.ExitCode -ne 0 -or ($log -split 'ENDING PASSED').Length -ne 3 -or $log.Contains('SCRIPT ERROR')) { throw "Campaign failed" }
+      - name: Publish verified build
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "preview-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" build/LakeCity.exe build/Menu.jpg build/City.jpg --target "$GITHUB_SHA" --title "Lake City — Четыре минуты" --notes "Первая игровая миссия. Windows x64."
+        shell: bash
+        run: gh release create "story-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" build/LakeCity.exe build/Menu.jpg build/City.jpg --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Lake City — Последний вызов" --notes "Короткая кампания. Четыре главы, буксировка, две концовки. Windows x64."

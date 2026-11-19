@@ -1,7 +1,18 @@
 extends Node3D
 
-const ROUTE := [Vector3(0,0,-24), Vector3(0,0,-88), Vector3(64,0,-88), Vector3(64,0,-148)]
-const TITLES := ["ПРАЧЕЧНАЯ  /  Остановись у Рэя", "ПОГОНЯ  /  Доберись до эстакады", "ЭСТАКАДА  /  Уйди по боковой улице", "ГАРАЖ  /  Остановись у ворот"]
+const Story = preload("res://story.gd")
+var cable: MeshInstance3D
+var final_cars:=Node3D.new()
+var chapter := 0
+var card := PanelContainer.new()
+var card_text := Label.new()
+var card_button := Button.new()
+var pending := ""
+var fork := false
+var second := Node3D.new()
+var trailer := Node3D.new()
+var winter := preload("res://winter.gd").new()
+var hud_panel := PanelContainer.new()
 var car := CharacterBody3D.new()
 var patrol := Node3D.new()
 var marker := Node3D.new()
@@ -77,14 +88,24 @@ func _unhandled_key_input(event):
 func _ready():
 	var light := DirectionalLight3D.new()
 	add_child(light)
-	light.rotation_degrees = Vector3(-52,-35,0)
+	light.rotation_degrees = Vector3(-18,-48,0)
+	light.light_color = Color("e7ad8e")
+	light.light_energy = 0.72
+	light.shadow_enabled = true
 	var world := WorldEnvironment.new()
 	world.environment = Environment.new()
+	world.environment.background_mode=Environment.BG_SKY
+	var twilight:=ProceduralSkyMaterial.new()
+	twilight.sky_top_color=Color("172a4d")
+	twilight.sky_horizon_color=Color("b3a0a4")
+	twilight.ground_horizon_color=Color("9894a0")
+	world.environment.sky=Sky.new()
+	world.environment.sky.sky_material=twilight
 	world.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	world.environment.ambient_light_color = Color("bbcee6")
-	world.environment.ambient_light_energy = 0.85
+	world.environment.ambient_light_color = Color("879ec8")
+	world.environment.ambient_light_energy = 0.58
 	world.environment.fog_enabled = true
-	world.environment.fog_light_color = Color("708794")
+	world.environment.fog_light_color = Color("65708a")
 	world.environment.fog_density = 0.005
 	add_child(world)
 	block(self,Vector3(30,-0.55,-70),Vector3(340,1,340),"d3e4eb")
@@ -115,6 +136,8 @@ func _ready():
 	for prop in [["firehydrant",8,-25],["bench",8,-21],["dumpster",73,-150]]:
 		model(self,prop[0],Vector3(prop[1],0,prop[2]),4)
 	for x in range(-72,145,12):
+		if absf(x-roundf(x/64.0)*64)<7:
+			continue
 		block(self,Vector3(x,3.5,-94),Vector3(0.8,7,0.8),"384450",true)
 	block(self,Vector3(32,7,-94),Vector3(226,1,5),"26313e")
 	add_child(car)
@@ -131,28 +154,121 @@ func _ready():
 	patrol.hide()
 	add_child(marker)
 	block(marker,Vector3(0,3,0),Vector3(0.45,6,0.45),"ffba52")
-	marker.position = ROUTE[0]
+	marker.position = Story.ROUTES[0][0]
 	add_child(camera)
 	camera.current = true
 	camera.far = 400
 	camera.position = Vector3(0,6,10)
 	camera.look_at(car.position)
-	var panel := PanelContainer.new()
-	add_child(panel)
-	panel.position = Vector2(16,16)
-	panel.add_child(hud)
+	add_child(winter)
+	winter.setup(self,car)
+	add_child(second)
+	block(second,Vector3.UP*3,Vector3(0.5,6,0.5),"5bdddc")
+	second.hide()
+	add_child(trailer)
+	vehicle(trailer,"car_sedan")
+	cable=block(self,Vector3.ZERO,Vector3(0.05,0.05,1),"c7bcab")
+	add_child(final_cars)
+	for location in [Vector3(-65,0,-85),Vector3(-70,0,-85),Vector3(64,0,-84)]:
+		var parked:=Node3D.new()
+		final_cars.add_child(parked)
+		vehicle(parked,"car_police" if location.x==-70 else "car_sedan")
+		parked.position=location
+		parked.rotation.y=1.0
+	var radar:=preload("res://radar.gd").new()
+	add_child(radar)
+	radar.position=Vector2(18,458)
+	radar.city=self
+	add_child(hud_panel)
+	hud_panel.position=Vector2(18,18)
+	hud_panel.add_child(hud)
 	hud.add_theme_font_size_override("font_size",17)
-	show_status()
+	add_child(card)
+	card.position=Vector2(88,145)
+	var skin:=StyleBoxFlat.new()
+	skin.bg_color=Color("#0b1424f7")
+	skin.border_width_left=4
+	skin.border_color=Color("#eab574")
+	for edge in [SIDE_TOP,SIDE_BOTTOM,SIDE_LEFT,SIDE_RIGHT]:
+		skin.set_content_margin(edge,24)
+	card.add_theme_stylebox_override("panel",skin)
+	var column:=VBoxContainer.new()
+	card.add_child(column)
+	column.add_child(card_text)
+	card_text.custom_minimum_size=Vector2(770,130)
+	card_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	card_text.add_theme_font_size_override("font_size",22)
+	column.add_child(card_button)
+	card_button.pressed.connect(advance_card)
+	begin_chapter(mini(Story.read_chapter(),3))
+
+func begin_chapter(index: int):
+	chapter=index
+	stage=0
+	speed=0
+	car.velocity=Vector3.ZERO
+	car.position=Story.START[index]
+	car.rotation.y=PI if index in [1,2] else 0.0
+	camera.position=car.position+car.basis.z*10+Vector3.UP*6
+	camera.look_at(car.position+Vector3.UP)
+	trail.clear()
+	capture=0
+	patrol.hide()
+	fork=false
+	second.hide()
+	marker.show()
+	final_cars.visible=index==3
+	cable.hide()
+	trailer.visible=index==1
+	trailer.position=Vector3(-64,0,-88)
+	marker.position=Story.ROUTES[index][0]
+	briefing=Story.RADIO[index][0]
+	display_card("intro","ГЛАВА %d   /   %s" % [index+1,Story.NAMES[index]],Story.BRIEF[index],"За руль")
+
+func display_card(kind: String, title: String, body: String, button: String):
+	pending=kind
+	card_text.text=title+"\n\n"+body
+	card_button.text=button
+	card.show()
+	hud_panel.hide()
+	card_button.grab_focus()
+
+func advance_card():
+	match pending:
+		"intro":
+			card.hide()
+			hud_panel.show()
+			pending=""
+			show_status()
+		"next":
+			Story.save_chapter(chapter+1)
+			begin_chapter(chapter+1)
+		"retry": begin_chapter(chapter)
+		"credits":
+			display_card("menu","LAKE CITY   /   ТИТРЫ","История Веры Крус и Рэя.\nМодели города и автомобилей — Kay Lousberg, KayKit.\nСпасибо за прохождение.","Главное меню")
+		"menu": get_tree().change_scene_to_file("res://menu.tscn")
+
+func finish_story(family: bool):
+	Story.save_chapter(4)
+	var title := "Семейная частота" if family else "Хозяйка города"
+	var body := "Рэй свернул на восток. Они убрали машину, и скорая прошла. Утром банк забрал контракт. Отец молча положил перед Верой второй ключ от мастерской." if family else "Рэй нагнал конвой. Вера получила кассу и диспетчерскую сеть. Наутро она услышала отца в эфире чужой компании. На её частоту он больше не вышел."
+	display_card("credits","ЭПИЛОГ   /   "+title,body,"Титры")
 
 func show_status():
-	var dist := int(car.position.distance_to(marker.position))
-	hud.text = "LAKE CITY    /    ЧЕТЫРЕ МИНУТЫ\n%s   ·   %d м\n%s\n%d км/ч    |    WASD / стрелки — руль и газ    ·    Пробел — тормоз    ·    R — заново" % [TITLES[stage],dist,briefing,roundi(absf(speed)*3.6)]
+	if fork:
+		hud.text="ПОСЛЕДНИЙ ВЫБОР\nЗапад · янтарная метка — конвой     /     Восток · бирюзовая — отец\nОстановись у выбранной метки."
+		return
+	hud.text="ГЛАВА %d   /   %s      ·      %d км/ч\n%s    ·    %d м\n%s" % [chapter+1,Story.NAMES[chapter],roundi(absf(speed)*3.6),Story.GOALS[chapter][stage],int(car.position.distance_to(marker.position)),briefing]
+
+func needs_stop() -> bool:
+	return stage==Story.ROUTES[chapter].size()-1 or (chapter==0 and stage==0) or (chapter==1 and stage==2) or (chapter==2 and stage in [1,2])
 
 func _physics_process(dt):
 	if Input.is_physical_key_pressed(KEY_R):
 		get_tree().reload_current_scene.call_deferred()
 		return
-	if ended:
+	winter.animate(dt,speed)
+	if pending!="":
 		return
 	clock += dt
 	var gas := int(Input.is_physical_key_pressed(KEY_W) or Input.is_action_pressed("ui_up")) - int(Input.is_physical_key_pressed(KEY_S) or Input.is_action_pressed("ui_down"))
@@ -166,7 +282,30 @@ func _physics_process(dt):
 		speed *= 0.8
 	camera.position = camera.position.lerp(car.position+car.basis.z*10+Vector3.UP*6,1-exp(-5*dt))
 	camera.look_at(car.position-car.basis.z*3+Vector3.UP)
-	if stage > 0:
+	if absf(car.position.x-32)>134 or absf(car.position.z+85)>116:
+		display_card("retry","Дорога закрыта","Дальше проезд занесло снегом. Вернись на маршрут.","Повторить главу")
+		return
+	if chapter==1 and stage>=3:
+		var hitch:=car.position+car.basis.z*2
+		var offset:=trailer.position-hitch
+		if offset.length()>3:
+			trailer.position=hitch+offset.normalized()*3
+			trailer.look_at(hitch)
+		var end:=trailer.position-trailer.basis.z*1.8+Vector3.UP*0.42
+		var start:=hitch+Vector3.UP*0.42
+		if start.distance_to(end)>0.1:
+			cable.show()
+			cable.position=(start+end)*0.5
+			cable.look_at(end)
+			cable.scale.z=start.distance_to(end)
+	if fork:
+		if absf(speed)<2:
+			if car.position.distance_to(second.position)<7:
+				finish_story(true)
+			elif car.position.distance_to(marker.position)<7:
+				finish_story(false)
+		return
+	if chapter==0 and stage > 0:
 		sample_time += dt
 		if sample_time >= 0.12:
 			trail.append(car.position)
@@ -181,18 +320,27 @@ func _physics_process(dt):
 		beacon.visible = fmod(clock,0.4)<0.2
 		capture = maxf(0,capture+dt*(1 if patrol.position.distance_to(car.position)<5 else -2))
 		if capture > 4:
-			ended = true
-			hud.text = "ПАТРУЛЬ ПЕРЕКРЫЛ ВЫЕЗД    /    R — повторить"
+			display_card("retry","Задержание","Патруль перекрыл выезд. Рэй прячет сумку под сиденьем.","Повторить главу")
 			return
-	if car.position.distance_to(marker.position)<7 and (stage in [1,2] or absf(speed)<2):
-		if stage == 3:
-			ended = true
-			hud.text = "ГАРАЖ ОТЦА    /    Миссия пройдена\nРэй: В сумке восемнадцать тысяч. Кто забрал остальное?\nR — сыграть ещё раз"
+	if car.position.distance_to(marker.position)<7 and (not needs_stop() or absf(speed)<2):
+		if chapter==1 and stage==1 and absf(speed)*3.6>30:
+			display_card("retry","Штрафстоянка","Патруль остановил машину за превышение. На посту нужно сбросить скорость до 30 км/ч.","Повторить главу")
 			return
-		stage += 1
-		if stage == 1:
-			patrol.position = car.position + Vector3(0,0,35)
+		if stage==Story.ROUTES[chapter].size()-1:
+			if chapter==3:
+				fork=true
+				marker.position=Vector3(-64,0,-88)
+				second.position=Vector3(64,0,-88)
+				second.show()
+			else:
+				var endings:=["В сумке восемнадцать тысяч. По бумагам пропал миллион. Рэй разворачивает квитанцию: подпись дежурного и номер машины.","Под запаской лежат запечатанные пачки. Ведомость указывает на мэрию. Отец просит отдать документы в газету. Вера звонит мэру.","Вера ставит подпись. На соседнем дворе гаснет вывеска. Отец перестаёт отвечать на её звонки."]
+				display_card("next",Story.NAMES[chapter]+"   /   Глава пройдена",endings[chapter],"Следующая глава")
+			show_status()
+			return
+		stage+=1
+		if chapter==0 and stage==1:
+			patrol.position=car.position+Vector3(0,0,35)
 			patrol.show()
-		briefing = ["","Диспетчер: Вызов принят четыре минуты назад.   Рэй: Но я только вышел!","Вера: Держись. Уходим направо под надземку.","Рэй: Налево, к гаражу. Тормози у метки!"][stage]
-		marker.position = ROUTE[stage]
+		briefing=Story.RADIO[chapter][stage]
+		marker.position=Story.ROUTES[chapter][stage]
 	show_status()

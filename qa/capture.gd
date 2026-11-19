@@ -16,6 +16,7 @@ func run():
 	await picture("build/Menu.jpg")
 	current_scene.start_button.pressed.emit()
 	await scene_changed
+	current_scene.advance_card()
 	await create_timer(0.35).timeout
 	await picture("build/City.jpg")
 	quit()
