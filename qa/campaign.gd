@@ -1,23 +1,26 @@
-extends SceneTree
-func _initialize():
+extends Node
+func _ready():
 	run.call_deferred()
 func run():
 	var city = load("res://city.tscn").instantiate()
-	root.add_child(city)
-	await physics_frame
+	add_child(city)
+	await get_tree().physics_frame
 	city.set_physics_process(false)
 	for family in [true,false]:
 		city.begin_chapter(0 if family else 3)
 		city.advance_card()
 		if not drive(city,family):
-			quit(1)
+			get_tree().quit(1)
 			return
 		print("ENDING PASSED: ",city.card_text.text)
 		city.advance_card()
 		if city.pending!="menu":
-			quit(1)
+			get_tree().quit(1)
 			return
-	quit(0)
+	var proof:=FileAccess.open("user://campaign-passed.txt",FileAccess.WRITE)
+	proof.store_line("Passed both endings")
+	proof.close()
+	get_tree().quit(0)
 
 func drive(city,family: bool) -> bool:
 	for tick in 9000:

@@ -32,6 +32,7 @@ jobs:
   windows:
     runs-on: windows-latest
     needs: build
+    timeout-minutes: 5
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -41,12 +42,21 @@ jobs:
         shell: pwsh
         run: |
           $exe = (Resolve-Path build/LakeCity.exe).Path
-          $intro = Start-Process $exe -ArgumentList '--headless --fixed-fps 60 --quit-after 190 --log-file intro.log' -PassThru -Wait
-          if ($intro.ExitCode -ne 0) { throw "Startup failed" }
-          $story = Start-Process $exe -ArgumentList '--headless --log-file campaign.log --script res://qa/campaign.gd' -PassThru -Wait
-          $log = Get-Content campaign.log -Raw
+          $env:APPDATA = "$env:RUNNER_TEMP/lake-city-check"
+          foreach ($test in @("boot","campaign")) {
+            $logPath = Join-Path $env:RUNNER_TEMP "$test.log"
+            $proc = Start-Process $exe -ArgumentList "--headless --log-file `"$logPath`" -- --$test-check" -PassThru
+            if (!$proc.WaitForExit(45000)) {
+              if (Test-Path $logPath) { Get-Content $logPath }
+              $proc.Kill()
+              throw "$test check timed out"
+            }
+            if ($proc.ExitCode -ne 0) { Get-Content $logPath; throw "$test failed" }
+          }
+          $log = Get-Content (Join-Path $env:RUNNER_TEMP 'campaign.log') -Raw
           Write-Output $log
-          if ($story.ExitCode -ne 0 -or ($log -split 'ENDING PASSED').Length -ne 3 -or $log.Contains('SCRIPT ERROR')) { throw "Campaign failed" }
+          $proof = Get-ChildItem $env:APPDATA -Recurse -Filter campaign-passed.txt
+          if (!$proof -or $log.Contains('SCRIPT ERROR')) { throw "Campaign failed" }
       - name: Publish verified build
         env:
           GH_TOKEN: ${{ github.token }}

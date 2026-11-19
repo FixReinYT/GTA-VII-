@@ -24,6 +24,8 @@ func caption(parent: Control, words: String, pos: Vector2, size_px: int, tint: C
 	return label
 
 func _ready():
+	if "--boot-check" in OS.get_cmdline_user_args():
+		get_tree().create_timer(3.0).timeout.connect(func(): get_tree().quit())
 	fill(self,screen)
 	var backdrop := TextureRect.new()
 	backdrop.texture = preload("res://art/night.webp")
@@ -75,6 +77,8 @@ func _ready():
 	audio.stream = preload("res://art/ident.wav")
 	audio.play()
 	screen.hide()
+	if "--campaign-check" in OS.get_cmdline_user_args():
+		add_child(preload("res://qa/campaign.gd").new())
 
 func choice(words: String, action: Callable) -> Button:
 	var button := Button.new()
