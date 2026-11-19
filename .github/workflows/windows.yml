@@ -1,0 +1,29 @@
+name: Lake City Windows
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot and Windows template
+        run: |
+          set -eu
+          base=https://github.com/godotengine/godot-builds/releases/download/4.6.3-stable
+          curl -fLsS --retry 3 "$base/Godot_v4.6.3-stable_linux.x86_64.zip" -o /tmp/editor.zip
+          unzip -q /tmp/editor.zip -d /tmp/editor
+          curl -fLsS --retry 3 "$base/Godot_v4.6.3-stable_export_templates.tpz" -o /tmp/templates.zip
+          destination="$HOME/.local/share/godot/export_templates/4.6.3.stable"
+          mkdir -p "$destination" build
+          unzip -jp /tmp/templates.zip templates/windows_release_x86_64.exe > "$destination/windows_release_x86_64.exe"
+          /tmp/editor/Godot* --headless --editor --import
+          /tmp/editor/Godot* --headless --export-release "Windows Desktop" build/LakeCity.exe
+          test -s build/LakeCity.exe
+      - name: Publish downloadable executable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "preview-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" build/LakeCity.exe --target "$GITHUB_SHA" --title "Lake City — Четыре минуты" --notes "Первая игровая миссия. Windows x64."
