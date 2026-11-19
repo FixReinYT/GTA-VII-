@@ -1,7 +1,9 @@
 config_version=5
 [application]
 config/name="Lake City"
-run/main_scene="res://city.tscn"
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.03,0.05,0.08,1)
+run/main_scene="res://menu.tscn"
 [display]
 window/size/viewport_width=1024
 window/size/viewport_height=640

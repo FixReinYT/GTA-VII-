@@ -41,14 +41,38 @@ func block(parent: Node3D, pos: Vector3, size: Vector3, color: String, solid := 
 		wall.add_child(shape)
 	return mesh
 
-func vehicle(body: Node3D, paint: String):
-	block(body,Vector3(0,0.8,0),Vector3(2.1,0.75,4.4),paint)
-	block(body,Vector3(0,1.4,0.2),Vector3(1.7,0.65,2.1),"415467")
-	for side in [-1,1]:
-		for axle in [-1,1]:
-			block(body,Vector3(side*1.03,0.45,axle*1.35),Vector3(0.24,0.7,0.8),"171d25")
-		block(body,Vector3(side*0.68,0.8,2.22),Vector3(0.55,0.24,0.07),"ff463b")
-		block(body,Vector3(side*0.68,0.8,-2.22),Vector3(0.55,0.24,0.07),"ffe8ad")
+func model(parent: Node3D, asset: String, pos: Vector3, factor: float) -> Node3D:
+	var scene: PackedScene = load("res://art/kaykit/%s.gltf" % asset)
+	var visual: Node3D = scene.instantiate()
+	parent.add_child(visual)
+	visual.position = pos
+	visual.scale = Vector3.ONE * factor
+	return visual
+
+func vehicle(body: Node3D, asset: String):
+	var visual := model(body,asset,Vector3.UP*0.31,5.0)
+	visual.rotation.y = PI
+
+func _unhandled_key_input(event):
+	if event.is_action_pressed("ui_cancel"):
+		var pause_screen := AcceptDialog.new()
+		pause_screen.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(pause_screen)
+		pause_screen.title = "Lake City"
+		pause_screen.dialog_text = "Игра на паузе"
+		pause_screen.ok_button_text = "Продолжить"
+		pause_screen.add_button("Главное меню",true,"menu")
+		var resume := func():
+			get_tree().paused = false
+			pause_screen.queue_free()
+		pause_screen.confirmed.connect(resume)
+		pause_screen.canceled.connect(resume)
+		pause_screen.custom_action.connect(func(_id):
+			get_tree().paused = false
+			get_tree().change_scene_to_file("res://menu.tscn"))
+		get_tree().paused = true
+		pause_screen.popup_centered()
+		get_viewport().set_input_as_handled()
 
 func _ready():
 	var light := DirectionalLight3D.new()
@@ -59,6 +83,9 @@ func _ready():
 	world.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	world.environment.ambient_light_color = Color("bbcee6")
 	world.environment.ambient_light_energy = 0.85
+	world.environment.fog_enabled = true
+	world.environment.fog_light_color = Color("708794")
+	world.environment.fog_density = 0.005
 	add_child(world)
 	block(self,Vector3(30,-0.55,-70),Vector3(340,1,340),"d3e4eb")
 	for x in [-64,0,64,128]:
@@ -71,16 +98,27 @@ func _ready():
 		for z in range(-184,28,16):
 			if absi(x)%64 < 12 or mini(mini(absi(z+40),absi(z+88)),mini(absi(z+148),absi(z-8))) < 12:
 				continue
-			var h := rng.randf_range(5,26)
-			block(self,Vector3(x,h/2,z),Vector3(11,h,10),["834f46","685963","4c5967"][rng.randi_range(0,2)],true)
-			block(self,Vector3(x,h,z),Vector3(11.4,0.4,10.4),"e4eff4")
-			for y in range(2,int(h),4):
-				block(self,Vector3(x,y,z+5.01),Vector3(7,1,0.1),"edc58b")
+			var kinds := ["building_A_withoutBase","building_B_withoutBase","building_D_withoutBase","building_F_withoutBase"]
+			var building := model(self,kinds[rng.randi_range(0,3)],Vector3(x,0,z),5.4)
+			building.rotation.y = rng.randi_range(0,3)*PI/2
+			var wall := StaticBody3D.new()
+			add_child(wall)
+			wall.position = Vector3(x,3,z)
+			var collider := CollisionShape3D.new()
+			var box := BoxShape3D.new()
+			box.size = Vector3(10.5,6,10.5)
+			collider.shape = box
+			wall.add_child(collider)
+	for z in range(-175,25,16):
+		for x in [-8,72]:
+			model(self,"streetlight",Vector3(x,0,z),5)
+	for prop in [["firehydrant",8,-25],["bench",8,-21],["dumpster",73,-150]]:
+		model(self,prop[0],Vector3(prop[1],0,prop[2]),4)
 	for x in range(-72,145,12):
 		block(self,Vector3(x,3.5,-94),Vector3(0.8,7,0.8),"384450",true)
 	block(self,Vector3(32,7,-94),Vector3(226,1,5),"26313e")
 	add_child(car)
-	vehicle(car,"aa402f")
+	vehicle(car,"car_sedan")
 	var collider := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = Vector3(2.2,1.5,4.4)
@@ -88,7 +126,7 @@ func _ready():
 	car.add_child(collider)
 	collider.position.y = 0.85
 	add_child(patrol)
-	vehicle(patrol,"dbdfe3")
+	vehicle(patrol,"car_police")
 	beacon = block(patrol,Vector3(0,1.85,0.2),Vector3(1.35,0.23,0.45),"ff463b")
 	patrol.hide()
 	add_child(marker)
@@ -96,6 +134,7 @@ func _ready():
 	marker.position = ROUTE[0]
 	add_child(camera)
 	camera.current = true
+	camera.far = 400
 	camera.position = Vector3(0,6,10)
 	camera.look_at(car.position)
 	var panel := PanelContainer.new()
@@ -139,7 +178,7 @@ func _physics_process(dt):
 			else:
 				patrol.look_at(dest)
 				patrol.position = patrol.position.move_toward(dest,14*dt)
-		beacon.material_override = materials["ff463b"] if fmod(clock,0.4)<0.2 else materials["ffe8ad"]
+		beacon.visible = fmod(clock,0.4)<0.2
 		capture = maxf(0,capture+dt*(1 if patrol.position.distance_to(car.position)<5 else -2))
 		if capture > 4:
 			ended = true

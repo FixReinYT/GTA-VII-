@@ -23,7 +23,9 @@ jobs:
           /tmp/editor/Godot* --headless --editor --import
           /tmp/editor/Godot* --headless --export-release "Windows Desktop" build/LakeCity.exe
           test -s build/LakeCity.exe
+      - name: Capture menu and mission
+        run: xvfb-run -a /tmp/editor/Godot* --audio-driver Dummy --script res://qa/capture.gd
       - name: Publish downloadable executable
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "preview-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" build/LakeCity.exe --target "$GITHUB_SHA" --title "Lake City — Четыре минуты" --notes "Первая игровая миссия. Windows x64."
+        run: gh release create "preview-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" build/LakeCity.exe build/Menu.jpg build/City.jpg --target "$GITHUB_SHA" --title "Lake City — Четыре минуты" --notes "Первая игровая миссия. Windows x64."
