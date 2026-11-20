@@ -118,24 +118,24 @@ func _ready():
 	var light := DirectionalLight3D.new()
 	add_child(light)
 	light.rotation_degrees = Vector3(-18,-48,0)
-	light.light_color = Color("e7ad8e")
-	light.light_energy = 0.72
+	light.light_color = Color("9bb8e4")
+	light.light_energy = 0.37
 	light.shadow_enabled = true
 	var world := WorldEnvironment.new()
 	world.environment = Environment.new()
 	world.environment.background_mode=Environment.BG_SKY
 	var twilight:=ProceduralSkyMaterial.new()
 	twilight.sky_top_color=Color("172a4d")
-	twilight.sky_horizon_color=Color("b3a0a4")
-	twilight.ground_horizon_color=Color("9894a0")
+	twilight.sky_horizon_color=Color("4c5872")
+	twilight.ground_horizon_color=Color("333f56")
 	world.environment.sky=Sky.new()
 	world.environment.sky.sky_material=twilight
 	world.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	world.environment.ambient_light_color = Color("879ec8")
 	world.environment.ambient_light_energy = 0.58
 	world.environment.fog_enabled = true
-	world.environment.fog_light_color = Color("65708a")
-	world.environment.fog_density = 0.005
+	world.environment.fog_light_color = Color("404e67")
+	world.environment.fog_density = 0.0028
 	add_child(world)
 	block(self,Vector3(32,-0.55,-92),Vector3(490,1,470),"d3e4eb")
 	for x in District.AVENUES:
@@ -211,7 +211,7 @@ func _ready():
 	marker.position = Story.ROUTES[0][0]
 	add_child(camera)
 	camera.current = true
-	camera.far = 400
+	camera.far = 620
 	camera.position = Vector3(0,6,10)
 	camera.look_at(car.position)
 	add_child(people)
@@ -220,6 +220,9 @@ func _ready():
 	driver.setup(people)
 	add_child(streets)
 	streets.setup(self)
+	var avenue:=preload("res://avenue.gd").new()
+	add_child(avenue)
+	avenue.setup(self)
 	add_child(winter)
 	winter.setup(self,car)
 	add_child(second)

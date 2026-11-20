@@ -11,7 +11,7 @@ func setup(city, car: Node3D):
 	for item in city.get_children():
 		if item is MeshInstance3D and item.material_override==city.materials["455467"]:
 			item.material_override=asphalt
-	for info in [[Vector3(-7,3,-24),"LAKE  LAUNDRY"],[Vector3(72,3,-148),"CRUZ  •  TOWING"],[Vector3(-72,3,-87),"IMPOUND  24H"],[Vector3(7,3,-40),"CITY  CONTRACTS"]]:
+	for info in [[Vector3(72,3,-148),"CRUZ  •  TOWING"],[Vector3(-72,3,-87),"IMPOUND  24H"],[Vector3(7,3,-40),"CITY  CONTRACTS"]]:
 		var signpost: Vector3=info[0]
 		city.block(self,signpost-Vector3.UP*1.6,Vector3(0.18,3.2,0.18),"36404e")
 		city.block(self,signpost,Vector3(5.6,1.05,0.23),"223244")

@@ -20,7 +20,7 @@ func run():
 	await create_timer(0.35).timeout
 	await picture("build/City.jpg")
 	current_scene.set_physics_process(false)
-	current_scene.camera.position=Vector3(-2,2.5,-18)
-	current_scene.camera.look_at(current_scene.people.ray.body.position+Vector3.UP)
+	current_scene.camera.position=Vector3(3,2.7,-16)
+	current_scene.camera.look_at(Vector3(-9.7,2,-24))
 	await picture("build/Laundry.jpg")
 	quit()
