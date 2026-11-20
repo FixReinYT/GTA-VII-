@@ -48,7 +48,7 @@ func setup(city):
 			body.position=Vector3(-5.2,0,-7-i*10)
 		else:
 			body.look_at(corners[1])
-		fleet.append({"body":body,"route":corners,"next":1,"moving":not parked,"model":model,"owned":false,"speed":5.0+i%5})
+		fleet.append({"body":body,"route":corners,"next":1,"moving":not parked,"model":model,"owned":false,"velocity":0.0,"speed":5.0+i%5})
 	add_child(police)
 	city.vehicle(police,"car_police")
 	police.hide()
@@ -134,15 +134,20 @@ func tick(city,dt:float):
 		var body:StaticBody3D=item.body
 		var target:Vector3=item.route[item.next]
 		var step:=body.position.direction_to(target)
-		# Drivers yield when someone occupies their lane ahead.
-		var rel:Vector3=focus-body.position
-		if rel.length()<6 and rel.dot(step)>0 and absf(rel.cross(step).y)<2.2:
-			continue
+		var gap:=minf(lane_gap(body.position,step,focus),lane_gap(body.position,step,city.car.position))
+		for other in fleet:
+			if other.body!=body:
+				gap=minf(gap,lane_gap(body.position,step,other.body.position)-2.0)
+		for walker in city.people.walkers:
+			if walker.body.visible:
+				gap=minf(gap,lane_gap(body.position,step,walker.body.position))
+		var cruise:float=minf(item.speed,sqrt(10.0*maxf(0.0,gap-3.0)))
+		item.velocity=move_toward(item.velocity,cruise,dt*(7.0 if item.velocity>cruise else 2.6))
 		if body.position.distance_to(target)<0.4:
 			item.next=(int(item.next)+1)%4
 		else:
 			body.look_at(target)
-			body.position=body.position.move_toward(target,item.speed*dt)
+			body.position=body.position.move_toward(target,minf(item.velocity*dt,maxf(0,gap-2.6)))
 	dispatch.text=""
 	if not city.free_drive:
 		return
@@ -189,3 +194,11 @@ func tick(city,dt:float):
 	elif active_model=="car_taxi" and not city.driver.walking:
 		dispatch.text+="   T — заказ такси"
 	dispatch.text+="   $%d" % money
+
+
+func lane_gap(origin:Vector3,direction:Vector3,point:Vector3)->float:
+	var relative:=point-origin
+	var ahead:=relative.dot(direction)
+	if ahead>0 and ahead<18 and absf(relative.cross(direction).y)<1.65:
+		return ahead
+	return 100.0

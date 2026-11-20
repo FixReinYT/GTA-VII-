@@ -396,7 +396,7 @@ func _physics_process(dt):
 	if pending!="":
 		return
 	clock += dt
-	people.animate(dt,car,driver.position if driver.walking else car.position)
+	people.animate(dt,car,driver.position if driver.walking else car.position,streets.fleet,speed)
 	var gas := int(Input.is_physical_key_pressed(KEY_W) or Input.is_action_pressed("ui_up")) - int(Input.is_physical_key_pressed(KEY_S) or Input.is_action_pressed("ui_down"))
 	var steer := int(Input.is_physical_key_pressed(KEY_A) or Input.is_action_pressed("ui_left")) - int(Input.is_physical_key_pressed(KEY_D) or Input.is_action_pressed("ui_right"))
 	if driver.walking:

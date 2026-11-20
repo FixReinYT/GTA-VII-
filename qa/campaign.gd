@@ -6,6 +6,9 @@ func run():
 	add_child(city)
 	await get_tree().physics_frame
 	city.set_physics_process(false)
+	if not check_street_behaviour(city):
+		get_tree().quit(1)
+		return
 	for free in [false,true]:
 		city.free_drive=free
 		city.begin_chapter(0)
@@ -130,3 +133,40 @@ func drive(city,family: bool) -> bool:
 			break
 	print("FAIL ",city.chapter,"/",city.stage," at ",city.car.position," goal ",city.marker.position,"  ",city.card_text.text)
 	return false
+
+func check_street_behaviour(city)->bool:
+	var walker:Dictionary=city.people.walkers.back()
+	var original:Vector3=walker.body.position
+	var paths=city.people.paths
+	var corner:int=paths.nearest_corner(Vector3(-8.6,0,-31.4))
+	var other:int=paths.nearest_corner(Vector3(8.6,0,-31.4))
+	walker.body.position=paths.corners[corner]
+	walker.last=corner
+	walker.goal=other
+	city.car.position=walker.body.position+Vector3(5,0,8)
+	var curb:Vector3=walker.body.position
+	city.people.advance_walker(walker,0.1,city.car,[],9)
+	if walker.body.position!=curb:
+		return false
+	city.car.position=Vector3(80,0,80)
+	city.people.advance_walker(walker,0.1,city.car,[],0)
+	if walker.body.position.distance_to(curb)<0.05:
+		return false
+	city.car.position=walker.body.position+Vector3.BACK*7
+	city.people.advance_walker(walker,0.1,city.car,[],10)
+	if walker.fright<=0:
+		return false
+	var traffic:Dictionary=city.streets.fleet[3]
+	var forward:Vector3=traffic.body.position.direction_to(traffic.route[traffic.next])
+	walker.body.position=traffic.body.position+forward*4
+	walker.body.show()
+	traffic.velocity=6.0
+	city.streets.tick(city,0.1)
+	if traffic.velocity>=6:
+		return false
+	walker.body.position=original
+	walker.goal=paths.nearest_corner(original)
+	walker.last=-1
+	walker.fright=0.0
+	print("PASS curb wait, crossing, evasive step and traffic braking")
+	return true
