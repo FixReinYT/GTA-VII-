@@ -42,6 +42,35 @@ func run():
 		if walker.down>0 or absf(walker.body.rotation.x)>0.05:
 			get_tree().quit(1)
 			return
+	city.free_drive=true
+	city.begin_chapter(0)
+	city.advance_card()
+	city.streets.wanted=0
+	var interact:=InputEventKey.new()
+	interact.physical_keycode=KEY_F
+	interact.pressed=true
+	city._unhandled_key_input(interact)
+	city.driver.position=city.streets.fleet[0].body.position+Vector3.RIGHT*1.7
+	city._unhandled_key_input(interact)
+	if city.driver.walking or city.streets.active_model!="car_taxi" or city.streets.wanted!=1:
+		get_tree().quit(1)
+		return
+	var initial_cash:int=city.streets.money
+	city.streets.taxi(city)
+	for stop in 2:
+		city.car.position=city.streets.stop.position
+		city.streets.tick(city,1.0/60)
+	if city.streets.fare!=0 or city.streets.money!=initial_cash+45:
+		get_tree().quit(1)
+		return
+	city.streets.police.position=city.car.position
+	city.streets.tracks.clear()
+	for tick in 190:
+		city.streets.tick(city,1.0/60)
+	if city.streets.wanted!=0 or city.pending!="intro":
+		get_tree().quit(1)
+		return
+	print("PASS vehicle transfer, fare payout and arrest")
 	city.free_drive=false
 	for family in [true,false]:
 		city.begin_chapter(0 if family else 3)

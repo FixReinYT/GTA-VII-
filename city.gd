@@ -6,6 +6,8 @@ var final_cars:=Node3D.new()
 const District = preload("res://district.gd")
 var people := preload("res://sidewalk.gd").new()
 var driver:=preload("res://driver.gd").new()
+var streets:=preload("res://streets.gd").new()
+var masonry:=ShaderMaterial.new()
 var free_drive := false
 var steering := 0.0
 var reverse_delay := 0.0
@@ -69,6 +71,7 @@ func model(parent: Node3D, asset: String, pos: Vector3, factor: float) -> Node3D
 func vehicle(body: Node3D, asset: String):
 	var visual := model(body,asset,Vector3.UP*0.31,5.0)
 	visual.rotation.y = PI
+	visual.name="VehicleSkin"
 
 func _unhandled_input(event):
 	if driver.walking and event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
@@ -76,13 +79,21 @@ func _unhandled_input(event):
 
 func _unhandled_key_input(event):
 	if event is InputEventKey and event.physical_keycode==KEY_F and event.pressed and not event.echo and pending=="" and not people.boarding:
-		driver.switch_seat(car,speed)
+		var target:Dictionary={}
+		if driver.walking:
+			target=streets.nearby(driver.position,minf(3.3,driver.position.distance_to(car.position)))
+		if target.is_empty():
+			driver.switch_seat(car,speed)
+		else:
+			streets.transfer(self,target)
 		if driver.walking:
 			speed=0
 			car.velocity=Vector3.ZERO
 		show_status()
 		get_viewport().set_input_as_handled()
 		return
+	if event is InputEventKey and event.physical_keycode==KEY_T and event.pressed and not event.echo and pending=="":
+		streets.taxi(self)
 	if event.is_action_pressed("ui_cancel"):
 		var pause_screen := AcceptDialog.new()
 		pause_screen.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -131,6 +142,8 @@ func _ready():
 		block(self,Vector3(x,-0.07,-92),Vector3(15,0.12,454),"455467")
 	for z in District.STREETS:
 		block(self,Vector3(32,-0.065,z),Vector3(478,0.12,15),"455467")
+	masonry.shader=preload("res://masonry.gdshader")
+	masonry.set_shader_parameter("palette",preload("res://art/kaykit/citybits_texture.png"))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 171
 	for x in range(-192,265,16):
@@ -158,6 +171,10 @@ func _ready():
 				continue
 			var kinds := ["building_A_withoutBase","building_B_withoutBase","building_D_withoutBase","building_F_withoutBase"]
 			var building := model(self,kinds[rng.randi_range(0,3)],Vector3(x,0,z),5.4)
+			for facade in building.find_children("*","MeshInstance3D",true,false):
+				facade.material_override=masonry
+			if z < -192 or x > 80:
+				building.scale.y*=1.0+0.35*(absi(x/16+z/16)%4)
 			building.rotation.y = rng.randi_range(0,3)*PI/2
 			var wall := StaticBody3D.new()
 			add_child(wall)
@@ -201,6 +218,8 @@ func _ready():
 	people.setup()
 	add_child(driver)
 	driver.setup(people)
+	add_child(streets)
+	streets.setup(self)
 	add_child(winter)
 	winter.setup(self,car)
 	add_child(second)
@@ -280,6 +299,7 @@ func display_card(kind: String, title: String, body: String, button: String):
 	card_text.text=title+"\n\n"+body
 	card_button.text=button
 	card.show()
+	streets.dispatch.hide()
 	hud_panel.hide()
 	card_button.grab_focus()
 
@@ -287,6 +307,7 @@ func advance_card():
 	match pending:
 		"intro":
 			card.hide()
+			streets.dispatch.show()
 			hud_panel.show()
 			pending=""
 			show_status()
@@ -307,7 +328,10 @@ func finish_story(family: bool):
 func show_status():
 	if driver.walking:
 		var distance:=roundi(driver.position.distance_to(car.position))
+		var foreign:=streets.nearby(driver.position,minf(3.3,distance))
 		var hint:="F — сесть за руль" if distance<=3 else "Машина · %d м" % distance
+		if not foreign.is_empty():
+			hint="F — сесть в машину рядом"
 		hud.text="ПЕШКОМ   ·   "+hint+"\nWASD / стрелки — идти   ·   Shift — бег   ·   ПКМ + мышь — обзор"
 		return
 	if free_drive:
@@ -328,6 +352,9 @@ func _physics_process(dt):
 		get_tree().reload_current_scene.call_deferred()
 		return
 	winter.animate(dt,speed)
+	if pending!="":
+		return
+	streets.tick(self,dt)
 	if pending!="":
 		return
 	clock += dt
@@ -363,7 +390,8 @@ func _physics_process(dt):
 	car.velocity=car.velocity.lerp(-car.basis.z*speed,1-exp(-14*dt))
 	if car.move_and_slide():
 		speed *= 0.8
-	people.vehicle_contacts(car,speed)
+	if people.vehicle_contacts(car,speed) and free_drive:
+		streets.report(self)
 	camera.position = camera.position.lerp(car.position+car.basis.z*10+Vector3.UP*6,1-exp(-5*dt))
 	camera.look_at(car.position-car.basis.z*3+Vector3.UP)
 	if car.position.x<District.WEST or car.position.x>District.EAST or car.position.z<District.NORTH or car.position.z>District.SOUTH:

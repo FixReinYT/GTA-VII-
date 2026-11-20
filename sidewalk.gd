@@ -77,20 +77,24 @@ func stride(person_data: Dictionary, phase: float):
 	for limb in 4:
 		person_data.limbs[limb].rotation.x=sin(phase)*0.48*(1 if limb in [0,3] else -1)
 
-func vehicle_contacts(car: Node3D, speed: float):
+func vehicle_contacts(car: Node3D, speed: float) -> bool:
+	var hit:=false
 	if absf(speed)<2.0:
-		return
+		return false
 	for walker in walkers:
 		var body: Node3D=walker.body
 		if not body.visible or walker.down>0:
 			continue
 		var local:=car.to_local(body.position)
 		if absf(local.x)<1.37 and absf(local.z)<2.45:
+			hit=true
 			walker.down=2.8
 			walker.returning=true
 			walker.push=-car.basis.z*signf(speed)*minf(absf(speed)*0.42,5.0)
 			body.rotation.y=car.rotation.y
 			body.rotation.x=signf(speed)*1.35
+
+	return hit
 
 func animate(dt: float, car: Node3D, focus: Vector3):
 	clock+=dt

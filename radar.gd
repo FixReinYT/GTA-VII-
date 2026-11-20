@@ -20,6 +20,10 @@ func _draw():
 		draw_circle(project_point(city.second.position),4,Color("#55e4df"))
 	if city.patrol.visible:
 		draw_circle(project_point(city.patrol.position),3,Color("#ff555c"))
+	if city.streets.police.visible:
+		draw_circle(project_point(city.streets.police.position),3,Color("#ff555c"))
+	if city.streets.stop.visible:
+		draw_circle(project_point(city.streets.stop.position),4,Color("#55e4df"))
 	var pos:=project_point(city.car.position)
 	if city.driver.walking:
 		draw_circle(pos,3,Color("#84d3dc"))
