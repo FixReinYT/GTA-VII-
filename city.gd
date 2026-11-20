@@ -3,6 +3,11 @@ extends Node3D
 const Story = preload("res://story.gd")
 var cable: MeshInstance3D
 var final_cars:=Node3D.new()
+const District = preload("res://district.gd")
+var people := preload("res://sidewalk.gd").new()
+var free_drive := false
+var steering := 0.0
+var reverse_delay := 0.0
 var chapter := 0
 var card := PanelContainer.new()
 var card_text := Label.new()
@@ -108,16 +113,35 @@ func _ready():
 	world.environment.fog_light_color = Color("65708a")
 	world.environment.fog_density = 0.005
 	add_child(world)
-	block(self,Vector3(30,-0.55,-70),Vector3(340,1,340),"d3e4eb")
-	for x in [-64,0,64,128]:
-		block(self,Vector3(x,-0.07,-72),Vector3(15,0.12,240),"455467")
-	for z in [8,-40,-88,-148,-196]:
-		block(self,Vector3(32,-0.065,z),Vector3(210,0.12,15),"455467")
+	block(self,Vector3(32,-0.55,-92),Vector3(490,1,470),"d3e4eb")
+	for x in District.AVENUES:
+		block(self,Vector3(x,-0.07,-92),Vector3(15,0.12,454),"455467")
+	for z in District.STREETS:
+		block(self,Vector3(32,-0.065,z),Vector3(478,0.12,15),"455467")
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 171
-	for x in range(-80,151,16):
-		for z in range(-184,28,16):
-			if absi(x)%64 < 12 or mini(mini(absi(z+40),absi(z+88)),mini(absi(z+148),absi(z-8))) < 12:
+	for x in range(-192,265,16):
+		for z in range(-304,128,16):
+			if absi(x)%64 < 12 or District.near_street(z):
+				continue
+			if x < -70 and (z > -196 and z < -40):
+				block(self,Vector3(x,1.3,z),Vector3(0.5,2.6,0.5),"594437")
+				var pine:=CylinderMesh.new()
+				pine.top_radius=0
+				pine.bottom_radius=2.5
+				pine.height=5
+				pine.radial_segments=6
+				var crown:=MeshInstance3D.new()
+				add_child(crown)
+				crown.mesh=pine
+				crown.position=Vector3(x,4,z)
+				var needles:=StandardMaterial3D.new()
+				needles.albedo_color=Color("40594c")
+				crown.material_override=needles
+				continue
+			if x>150:
+				block(self,Vector3(x,1.4,z),Vector3(10,2.8,4),"794f46",true)
+				block(self,Vector3(x,4.2,z),Vector3(9,2.8,3.9),"516a77")
 				continue
 			var kinds := ["building_A_withoutBase","building_B_withoutBase","building_D_withoutBase","building_F_withoutBase"]
 			var building := model(self,kinds[rng.randi_range(0,3)],Vector3(x,0,z),5.4)
@@ -160,6 +184,8 @@ func _ready():
 	camera.far = 400
 	camera.position = Vector3(0,6,10)
 	camera.look_at(car.position)
+	add_child(people)
+	people.setup()
 	add_child(winter)
 	winter.setup(self,car)
 	add_child(second)
@@ -200,12 +226,20 @@ func _ready():
 	card_text.add_theme_font_size_override("font_size",22)
 	column.add_child(card_button)
 	card_button.pressed.connect(advance_card)
-	begin_chapter(mini(Story.read_chapter(),3))
+	free_drive=get_tree().get_meta("free_drive",false)
+	begin_chapter(0 if free_drive else mini(Story.read_chapter(),3))
+	if free_drive:
+		people.reset_ray(false)
+		marker.hide()
+		advance_card()
 
 func begin_chapter(index: int):
 	chapter=index
 	stage=0
 	speed=0
+	steering=0
+	reverse_delay=0
+	people.reset_ray(index==0)
 	car.velocity=Vector3.ZERO
 	car.position=Story.START[index]
 	car.rotation.y=PI if index in [1,2] else 0.0
@@ -255,10 +289,15 @@ func finish_story(family: bool):
 	display_card("credits","ЭПИЛОГ   /   "+title,body,"Титры")
 
 func show_status():
+	if free_drive:
+		hud.text="СВОБОДНАЯ ПОЕЗДКА    /    %s     ·     %d км/ч" % [District.district_name(car.position),roundi(absf(speed)*3.6)]
+		return
 	if fork:
 		hud.text="ПОСЛЕДНИЙ ВЫБОР\nЗапад · янтарная метка — конвой     /     Восток · бирюзовая — отец\nОстановись у выбранной метки."
 		return
 	hud.text="ГЛАВА %d   /   %s      ·      %d км/ч\n%s    ·    %d м\n%s" % [chapter+1,Story.NAMES[chapter],roundi(absf(speed)*3.6),Story.GOALS[chapter][stage],int(car.position.distance_to(marker.position)),briefing]
+
+	hud.text+="    ·    "+District.district_name(car.position)
 
 func needs_stop() -> bool:
 	return stage==Story.ROUTES[chapter].size()-1 or (chapter==0 and stage==0) or (chapter==1 and stage==2) or (chapter==2 and stage in [1,2])
@@ -271,19 +310,44 @@ func _physics_process(dt):
 	if pending!="":
 		return
 	clock += dt
+	people.animate(dt,car)
 	var gas := int(Input.is_physical_key_pressed(KEY_W) or Input.is_action_pressed("ui_up")) - int(Input.is_physical_key_pressed(KEY_S) or Input.is_action_pressed("ui_down"))
 	var steer := int(Input.is_physical_key_pressed(KEY_A) or Input.is_action_pressed("ui_left")) - int(Input.is_physical_key_pressed(KEY_D) or Input.is_action_pressed("ui_right"))
-	speed = move_toward(speed,gas*24.0 if gas >= 0 else -8.0,dt*(24 if Input.is_physical_key_pressed(KEY_SPACE) else 7))
-	if Input.is_physical_key_pressed(KEY_SPACE):
-		speed = move_toward(speed,0,40*dt)
-	car.rotate_y(steer*signf(speed)*minf(absf(speed)*0.17,1.65)*dt)
-	car.velocity = car.velocity.lerp(-car.basis.z*speed,minf(1,dt*4))
+	var brake := Input.is_physical_key_pressed(KEY_SPACE)
+	if brake or people.boarding:
+		speed=move_toward(speed,0.0,27*dt)
+	elif gas>0:
+		speed=move_toward(speed,26.0,(18 if speed<0 else 9)*dt)
+		reverse_delay=0
+	elif gas<0:
+		if speed>0:
+			speed=move_toward(speed,0,21*dt)
+			reverse_delay=0
+		else:
+			reverse_delay+=dt
+			if reverse_delay>0.22:
+				speed=move_toward(speed,-6,6*dt)
+	else:
+		speed=move_toward(speed,0,(1.6+absf(speed)*0.055)*dt)
+		reverse_delay=0
+	steering=move_toward(steering,float(steer),(5 if steer==0 else 3.8)*dt)
+	var turn_rate:=minf(absf(speed)*0.27,1.72)/(1+maxf(absf(speed)-10,0)*0.045)
+	car.rotate_y(steering*signf(speed)*turn_rate*dt)
+	car.velocity=car.velocity.lerp(-car.basis.z*speed,1-exp(-14*dt))
 	if car.move_and_slide():
 		speed *= 0.8
 	camera.position = camera.position.lerp(car.position+car.basis.z*10+Vector3.UP*6,1-exp(-5*dt))
 	camera.look_at(car.position-car.basis.z*3+Vector3.UP)
-	if absf(car.position.x-32)>134 or absf(car.position.z+85)>116:
+	if car.position.x<District.WEST or car.position.x>District.EAST or car.position.z<District.NORTH or car.position.z>District.SOUTH:
+		if free_drive:
+			car.position=Vector3(0,0,0)
+			speed=0
+			car.velocity=Vector3.ZERO
+			return
 		display_card("retry","Дорога закрыта","Дальше проезд занесло снегом. Вернись на маршрут.","Повторить главу")
+		return
+	if free_drive:
+		show_status()
 		return
 	if chapter==1 and stage>=3:
 		var hitch:=car.position+car.basis.z*2
@@ -339,6 +403,9 @@ func _physics_process(dt):
 			return
 		stage+=1
 		if chapter==0 and stage==1:
+			people.boarding=true
+			speed=0
+			car.velocity=Vector3.ZERO
 			patrol.position=car.position+Vector3(0,0,35)
 			patrol.show()
 		briefing=Story.RADIO[chapter][stage]

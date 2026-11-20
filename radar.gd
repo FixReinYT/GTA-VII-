@@ -1,19 +1,21 @@
 extends Control
+const District=preload("res://district.gd")
 var city: Node3D
 
 func project_point(p: Vector3) -> Vector2:
-	return Vector2((p.x+87)*0.67+9,(p.z+201)*0.57+25)
+	return Vector2((p.x-District.WEST)*0.315+9,(p.z-District.NORTH)*0.28+24)
 
 func _draw():
 	if not city or not city.pending.is_empty():
 		return
 	draw_rect(Rect2(0,0,168,159),Color("#0c1728e8"))
 	draw_string(ThemeDB.fallback_font,Vector2(10,16),"ДИСПЕТЧЕРСКАЯ    N ↑",HORIZONTAL_ALIGNMENT_LEFT,-1,11,Color("#e0d6c6"))
-	for x in [-64,0,64,128]:
-		draw_line(project_point(Vector3(x,0,-194)),project_point(Vector3(x,0,25)),Color("#54647b"),3)
-	for z in [-196,-148,-88,-40,8]:
-		draw_line(project_point(Vector3(-76,0,z)),project_point(Vector3(137,0,z)),Color("#54647b"),3)
-	draw_circle(project_point(city.marker.position),4,Color("#ffbe65"))
+	for x in District.AVENUES:
+		draw_line(project_point(Vector3(x,0,District.NORTH)),project_point(Vector3(x,0,District.SOUTH)),Color("#54647b"),3)
+	for z in District.STREETS:
+		draw_line(project_point(Vector3(District.WEST,0,z)),project_point(Vector3(District.EAST,0,z)),Color("#54647b"),3)
+	if city.marker.visible:
+		draw_circle(project_point(city.marker.position),4,Color("#ffbe65"))
 	if city.fork:
 		draw_circle(project_point(city.second.position),4,Color("#55e4df"))
 	if city.patrol.visible:

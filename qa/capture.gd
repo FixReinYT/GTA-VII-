@@ -19,4 +19,8 @@ func run():
 	current_scene.advance_card()
 	await create_timer(0.35).timeout
 	await picture("build/City.jpg")
+	current_scene.set_physics_process(false)
+	current_scene.camera.position=Vector3(-2,2.5,-18)
+	current_scene.camera.look_at(current_scene.people.ray.body.position+Vector3.UP)
+	await picture("build/Laundry.jpg")
 	quit()
