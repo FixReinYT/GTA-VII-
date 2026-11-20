@@ -57,7 +57,7 @@ func _ready():
 	choice("Свободная поездка",func():
 		get_tree().set_meta("free_drive",true)
 		get_tree().change_scene_to_file("res://city.tscn"))
-	choice("Управление",func(): details.text = "WASD / стрелки — движение   ·   Пробел — тормоз\nEsc — пауза   ·   R — начать миссию заново")
+	choice("Управление",func(): details.text = "WASD / стрелки — движение   ·   Пробел — тормоз\nF — выйти / сесть   ·   Shift — бег   ·   Esc — пауза")
 	choice("Во весь экран",func(): DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN))
 	choice("Выйти",func(): get_tree().quit())
 	screen.add_child(details)

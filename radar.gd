@@ -21,6 +21,9 @@ func _draw():
 	if city.patrol.visible:
 		draw_circle(project_point(city.patrol.position),3,Color("#ff555c"))
 	var pos:=project_point(city.car.position)
+	if city.driver.walking:
+		draw_circle(pos,3,Color("#84d3dc"))
+		pos=project_point(city.driver.position)
 	var direction:=Vector2(-city.car.basis.z.x,-city.car.basis.z.z).normalized()
 	draw_colored_polygon(PackedVector2Array([pos+direction*6,pos-direction*4+direction.orthogonal()*4,pos-direction*4-direction.orthogonal()*4]),Color.WHITE)
 

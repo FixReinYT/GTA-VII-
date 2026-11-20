@@ -5,6 +5,7 @@ var cable: MeshInstance3D
 var final_cars:=Node3D.new()
 const District = preload("res://district.gd")
 var people := preload("res://sidewalk.gd").new()
+var driver:=preload("res://driver.gd").new()
 var free_drive := false
 var steering := 0.0
 var reverse_delay := 0.0
@@ -69,7 +70,19 @@ func vehicle(body: Node3D, asset: String):
 	var visual := model(body,asset,Vector3.UP*0.31,5.0)
 	visual.rotation.y = PI
 
+func _unhandled_input(event):
+	if driver.walking and event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		driver.heading-=event.relative.x*0.008
+
 func _unhandled_key_input(event):
+	if event is InputEventKey and event.physical_keycode==KEY_F and event.pressed and not event.echo and pending=="" and not people.boarding:
+		driver.switch_seat(car,speed)
+		if driver.walking:
+			speed=0
+			car.velocity=Vector3.ZERO
+		show_status()
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("ui_cancel"):
 		var pause_screen := AcceptDialog.new()
 		pause_screen.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -186,6 +199,8 @@ func _ready():
 	camera.look_at(car.position)
 	add_child(people)
 	people.setup()
+	add_child(driver)
+	driver.setup(people)
 	add_child(winter)
 	winter.setup(self,car)
 	add_child(second)
@@ -234,6 +249,7 @@ func _ready():
 		advance_card()
 
 func begin_chapter(index: int):
+	driver.park()
 	chapter=index
 	stage=0
 	speed=0
@@ -289,15 +305,20 @@ func finish_story(family: bool):
 	display_card("credits","ЭПИЛОГ   /   "+title,body,"Титры")
 
 func show_status():
+	if driver.walking:
+		var distance:=roundi(driver.position.distance_to(car.position))
+		var hint:="F — сесть за руль" if distance<=3 else "Машина · %d м" % distance
+		hud.text="ПЕШКОМ   ·   "+hint+"\nWASD / стрелки — идти   ·   Shift — бег   ·   ПКМ + мышь — обзор"
+		return
 	if free_drive:
-		hud.text="СВОБОДНАЯ ПОЕЗДКА    /    %s     ·     %d км/ч" % [District.district_name(car.position),roundi(absf(speed)*3.6)]
+		hud.text="СВОБОДНАЯ ПОЕЗДКА    /    %s     ·     %d км/ч    ·    F — выйти" % [District.district_name(car.position),roundi(absf(speed)*3.6)]
 		return
 	if fork:
 		hud.text="ПОСЛЕДНИЙ ВЫБОР\nЗапад · янтарная метка — конвой     /     Восток · бирюзовая — отец\nОстановись у выбранной метки."
 		return
 	hud.text="ГЛАВА %d   /   %s      ·      %d км/ч\n%s    ·    %d м\n%s" % [chapter+1,Story.NAMES[chapter],roundi(absf(speed)*3.6),Story.GOALS[chapter][stage],int(car.position.distance_to(marker.position)),briefing]
 
-	hud.text+="    ·    "+District.district_name(car.position)
+	hud.text+="    ·    "+District.district_name(car.position)+"    ·    F — выйти"
 
 func needs_stop() -> bool:
 	return stage==Story.ROUTES[chapter].size()-1 or (chapter==0 and stage==0) or (chapter==1 and stage==2) or (chapter==2 and stage in [1,2])
@@ -310,9 +331,15 @@ func _physics_process(dt):
 	if pending!="":
 		return
 	clock += dt
-	people.animate(dt,car)
+	people.animate(dt,car,driver.position if driver.walking else car.position)
 	var gas := int(Input.is_physical_key_pressed(KEY_W) or Input.is_action_pressed("ui_up")) - int(Input.is_physical_key_pressed(KEY_S) or Input.is_action_pressed("ui_down"))
 	var steer := int(Input.is_physical_key_pressed(KEY_A) or Input.is_action_pressed("ui_left")) - int(Input.is_physical_key_pressed(KEY_D) or Input.is_action_pressed("ui_right"))
+	if driver.walking:
+		driver.walk(dt,steer,gas,people,camera)
+		show_status()
+		if chapter==0 and stage>0 and not free_drive:
+			pursue(dt)
+		return
 	var brake := Input.is_physical_key_pressed(KEY_SPACE)
 	if brake or people.boarding:
 		speed=move_toward(speed,0.0,27*dt)
@@ -336,6 +363,7 @@ func _physics_process(dt):
 	car.velocity=car.velocity.lerp(-car.basis.z*speed,1-exp(-14*dt))
 	if car.move_and_slide():
 		speed *= 0.8
+	people.vehicle_contacts(car,speed)
 	camera.position = camera.position.lerp(car.position+car.basis.z*10+Vector3.UP*6,1-exp(-5*dt))
 	camera.look_at(car.position-car.basis.z*3+Vector3.UP)
 	if car.position.x<District.WEST or car.position.x>District.EAST or car.position.z<District.NORTH or car.position.z>District.SOUTH:
@@ -370,21 +398,8 @@ func _physics_process(dt):
 				finish_story(false)
 		return
 	if chapter==0 and stage > 0:
-		sample_time += dt
-		if sample_time >= 0.12:
-			trail.append(car.position)
-			sample_time = 0
-		if trail.size() > 0:
-			var dest := trail[0]
-			if patrol.position.distance_to(dest) < 1:
-				trail.pop_front()
-			else:
-				patrol.look_at(dest)
-				patrol.position = patrol.position.move_toward(dest,14*dt)
-		beacon.visible = fmod(clock,0.4)<0.2
-		capture = maxf(0,capture+dt*(1 if patrol.position.distance_to(car.position)<5 else -2))
-		if capture > 4:
-			display_card("retry","Задержание","Патруль перекрыл выезд. Рэй прячет сумку под сиденьем.","Повторить главу")
+		pursue(dt)
+		if pending!="":
 			return
 	if car.position.distance_to(marker.position)<7 and (not needs_stop() or absf(speed)<2):
 		if chapter==1 and stage==1 and absf(speed)*3.6>30:
@@ -411,3 +426,21 @@ func _physics_process(dt):
 		briefing=Story.RADIO[chapter][stage]
 		marker.position=Story.ROUTES[chapter][stage]
 	show_status()
+
+func pursue(dt):
+	sample_time += dt
+	if sample_time >= 0.12:
+		trail.append(driver.position if driver.walking else car.position)
+		sample_time = 0
+	if trail.size() > 0:
+		var dest := trail[0]
+		if patrol.position.distance_to(dest) < 1:
+			trail.pop_front()
+		else:
+			patrol.look_at(dest)
+			patrol.position = patrol.position.move_toward(dest,14*dt)
+	beacon.visible = fmod(clock,0.4)<0.2
+	capture = maxf(0,capture+dt*(1 if patrol.position.distance_to(driver.position if driver.walking else car.position)<5 else -2))
+	if capture > 4:
+		display_card("retry","Задержание","Патруль перекрыл выезд. Рэй прячет сумку под сиденьем.","Повторить главу")
+		return

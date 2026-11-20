@@ -49,7 +49,7 @@ func person(index: int, pos: Vector3) -> Dictionary:
 			part(pivot,"round",coat if arm else "343a49",Vector3.DOWN*(0.25 if arm else 0.38),Vector3(0.18,0.59,0.2) if arm else Vector3(0.21,0.78,0.23))
 			if not arm:
 				part(pivot,"boot","322f34",Vector3(0,-0.74,-0.043),Vector3(0.19,0.16,0.31))
-	return {"body":body,"limbs":limbs,"origin":pos,"phase":index*2.73}
+	return {"body":body,"limbs":limbs,"origin":pos,"phase":index*2.73,"down":0.0,"push":Vector3.ZERO,"returning":false}
 
 func setup():
 	for i in 64:
@@ -77,15 +77,44 @@ func stride(person_data: Dictionary, phase: float):
 	for limb in 4:
 		person_data.limbs[limb].rotation.x=sin(phase)*0.48*(1 if limb in [0,3] else -1)
 
-func animate(dt: float, car: Node3D):
+func vehicle_contacts(car: Node3D, speed: float):
+	if absf(speed)<2.0:
+		return
+	for walker in walkers:
+		var body: Node3D=walker.body
+		if not body.visible or walker.down>0:
+			continue
+		var local:=car.to_local(body.position)
+		if absf(local.x)<1.37 and absf(local.z)<2.45:
+			walker.down=2.8
+			walker.returning=true
+			walker.push=-car.basis.z*signf(speed)*minf(absf(speed)*0.42,5.0)
+			body.rotation.y=car.rotation.y
+			body.rotation.x=signf(speed)*1.35
+
+func animate(dt: float, car: Node3D, focus: Vector3):
 	clock+=dt
 	for walker in walkers:
 		var node: Node3D=walker.body
-		node.visible=car.position.distance_squared_to(walker.origin)<5600
+		node.visible=focus.distance_squared_to(walker.origin)<5600
 		if not node.visible:
 			continue
 		var distance:=fposmod(clock*1.17+float(walker.phase),24.0)
-		node.position.z=walker.origin.z+absf(distance-12)-6
+		if walker.down>0:
+			node.position+=walker.push*dt
+			walker.push=walker.push.move_toward(Vector3.ZERO,10*dt)
+			walker.down=maxf(0,walker.down-dt)
+			if walker.down<0.55:
+				node.rotation.x=move_toward(node.rotation.x,0,dt*3)
+			continue
+		var destination: Vector3=walker.origin+Vector3.BACK*(absf(distance-12)-6)
+		if walker.returning:
+			if car.position.distance_to(node.position)<2.7:
+				continue
+			node.position=node.position.move_toward(destination,2.3*dt)
+			walker.returning=node.position.distance_to(destination)>0.1
+		else:
+			node.position=destination
 		node.rotation.y=0 if distance<12 else PI
 		stride(walker,clock*4.4+float(walker.phase))
 	if boarding:

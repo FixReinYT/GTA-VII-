@@ -6,6 +6,43 @@ func run():
 	add_child(city)
 	await get_tree().physics_frame
 	city.set_physics_process(false)
+	for free in [false,true]:
+		city.free_drive=free
+		city.begin_chapter(0)
+		city.advance_card()
+		var event:=InputEventKey.new()
+		event.physical_keycode=KEY_F
+		event.pressed=true
+		city._unhandled_key_input(event)
+		if not city.driver.walking:
+			get_tree().quit(1)
+			return
+		var start: Vector3=city.driver.position
+		Input.action_press("ui_up")
+		for i in 15:
+			city._physics_process(1.0/60)
+		Input.action_release("ui_up")
+		if city.driver.position.distance_to(start)<0.12:
+			get_tree().quit(1)
+			return
+		city._unhandled_key_input(event)
+		if city.driver.walking:
+			get_tree().quit(1)
+			return
+		var walker: Dictionary=city.people.walkers.back()
+		city.car.position=walker.body.position+Vector3.BACK*2.1
+		city.speed=8
+		city._physics_process(1.0/60)
+		if walker.down<=0:
+			get_tree().quit(1)
+			return
+		city.car.position=Vector3.ZERO
+		for i in 190:
+			city.people.animate(1.0/60,city.car,Vector3.ZERO)
+		if walker.down>0 or absf(walker.body.rotation.x)>0.05:
+			get_tree().quit(1)
+			return
+	city.free_drive=false
 	for family in [true,false]:
 		city.begin_chapter(0 if family else 3)
 		city.advance_card()
