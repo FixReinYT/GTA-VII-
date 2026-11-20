@@ -10,11 +10,23 @@ func run():
 		city.free_drive=free
 		city.begin_chapter(0)
 		city.advance_card()
+		var motion:=InputEventMouseMotion.new()
+		motion.screen_relative=Vector2(12,3)
+		var before:float=city.orbit_yaw
+		city._input(motion)
+		if is_equal_approx(before,city.orbit_yaw):
+			get_tree().quit(1)
+			return
 		var event:=InputEventKey.new()
 		event.physical_keycode=KEY_F
 		event.pressed=true
 		city._unhandled_key_input(event)
 		if not city.driver.walking:
+			get_tree().quit(1)
+			return
+		before=city.driver.heading
+		city._input(motion)
+		if is_equal_approx(before,city.driver.heading):
 			get_tree().quit(1)
 			return
 		var start: Vector3=city.driver.position

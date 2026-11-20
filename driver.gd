@@ -47,7 +47,7 @@ func switch_seat(car: CharacterBody3D, speed: float):
 			show()
 			return
 
-func walk(dt: float, horizontal: float, forward: float, people, camera: Camera3D):
+func walk(dt: float, horizontal: float, forward: float, people, camera: Camera3D, pitch: float, zoom: float):
 	var direction:=Vector3(-horizontal,0,-forward).rotated(Vector3.UP,heading).limit_length(1)
 	var pace:=6.1 if Input.is_physical_key_pressed(KEY_SHIFT) else 3.4
 	velocity=direction*pace
@@ -59,7 +59,7 @@ func walk(dt: float, horizontal: float, forward: float, people, camera: Camera3D
 		step_phase+=pace*dt*2.4
 	people.stride(avatar,step_phase if direction.length_squared()>0 else 0.0)
 	var focus:=position+Vector3.UP*1.2
-	var desired:=focus+Vector3(0,2.3,5.4).rotated(Vector3.UP,heading)
+	var desired:=focus+Vector3(0,sin(pitch),cos(pitch)).rotated(Vector3.UP,heading)*4.2*zoom
 	var ray:=PhysicsRayQueryParameters3D.create(focus,desired,1,[get_rid()])
 	var obstacle:=get_world_3d().direct_space_state.intersect_ray(ray)
 	if not obstacle.is_empty():

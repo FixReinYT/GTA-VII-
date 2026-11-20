@@ -24,6 +24,7 @@ func caption(parent: Control, words: String, pos: Vector2, size_px: int, tint: C
 	return label
 
 func _ready():
+	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 	if "--boot-check" in OS.get_cmdline_user_args():
 		get_tree().create_timer(3.0).timeout.connect(func(): get_tree().quit())
 	fill(self,screen)
@@ -57,8 +58,8 @@ func _ready():
 	choice("Свободная поездка",func():
 		get_tree().set_meta("free_drive",true)
 		get_tree().change_scene_to_file("res://city.tscn"))
-	choice("Управление",func(): details.text = "WASD / стрелки — движение   ·   Пробел — тормоз\nF — выйти / сесть   ·   Shift — бег   ·   Esc — пауза")
-	choice("Во весь экран",func(): DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN))
+	choice("Управление",func(): details.text = "WASD / стрелки — движение   ·   Пробел — тормоз\nМышь — обзор, колесо — масштаб   ·   F — выйти / сесть   ·   Esc — пауза")
+	choice("Полный экран / окно",func(): DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN))
 	choice("Выйти",func(): get_tree().quit())
 	screen.add_child(details)
 	details.position = Vector2(53,545)

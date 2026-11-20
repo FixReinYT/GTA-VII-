@@ -73,12 +73,36 @@ func vehicle(body: Node3D, asset: String):
 	visual.rotation.y = PI
 	visual.name="VehicleSkin"
 
-func _unhandled_input(event):
-	if driver.walking and event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-		driver.heading-=event.relative.x*0.008
+var orbit_yaw := 0.0
+var orbit_pitch := 0.32
+var orbit_zoom := 1.0
+
+func sync_cursor():
+	var playing := pending.is_empty() and not get_tree().paused and get_window().has_focus()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if playing else Input.MOUSE_MODE_VISIBLE
+
+func _input(event):
+	if not pending.is_empty() or get_tree().paused:
+		return
+	if event is InputEventMouseMotion:
+		var offset:Vector2=event.screen_relative*0.003
+		if driver.walking:
+			driver.heading-=offset.x
+		else:
+			orbit_yaw=wrapf(orbit_yaw-offset.x,-PI,PI)
+		orbit_pitch=clampf(orbit_pitch+offset.y,-0.06,1.05)
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index==MOUSE_BUTTON_WHEEL_UP:
+			orbit_zoom=maxf(0.60,orbit_zoom-0.10)
+		elif event.button_index==MOUSE_BUTTON_WHEEL_DOWN:
+			orbit_zoom=minf(1.55,orbit_zoom+0.10)
+
+func _exit_tree():
+	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 
 func _unhandled_key_input(event):
 	if event is InputEventKey and event.physical_keycode==KEY_F and event.pressed and not event.echo and pending=="" and not people.boarding:
+		var was_walking:=driver.walking
 		var target:Dictionary={}
 		if driver.walking:
 			target=streets.nearby(driver.position,minf(3.3,driver.position.distance_to(car.position)))
@@ -86,6 +110,11 @@ func _unhandled_key_input(event):
 			driver.switch_seat(car,speed)
 		else:
 			streets.transfer(self,target)
+		if driver.walking!=was_walking:
+			if driver.walking:
+				driver.heading+=orbit_yaw
+			else:
+				orbit_yaw=wrapf(driver.heading-car.rotation.y,-PI,PI)
 		if driver.walking:
 			speed=0
 			car.velocity=Vector3.ZERO
@@ -105,16 +134,20 @@ func _unhandled_key_input(event):
 		var resume := func():
 			get_tree().paused = false
 			pause_screen.queue_free()
+			sync_cursor.call_deferred()
 		pause_screen.confirmed.connect(resume)
 		pause_screen.canceled.connect(resume)
 		pause_screen.custom_action.connect(func(_id):
 			get_tree().paused = false
 			get_tree().change_scene_to_file("res://menu.tscn"))
 		get_tree().paused = true
+		sync_cursor()
 		pause_screen.popup_centered()
 		get_viewport().set_input_as_handled()
 
 func _ready():
+	get_window().focus_entered.connect(sync_cursor)
+	get_window().focus_exited.connect(func(): Input.mouse_mode=Input.MOUSE_MODE_VISIBLE)
 	var light := DirectionalLight3D.new()
 	add_child(light)
 	light.rotation_degrees = Vector3(-18,-48,0)
@@ -299,6 +332,7 @@ func begin_chapter(index: int):
 
 func display_card(kind: String, title: String, body: String, button: String):
 	pending=kind
+	sync_cursor()
 	card_text.text=title+"\n\n"+body
 	card_button.text=button
 	card.show()
@@ -313,6 +347,7 @@ func advance_card():
 			streets.dispatch.show()
 			hud_panel.show()
 			pending=""
+			sync_cursor()
 			show_status()
 		"next":
 			Story.save_chapter(chapter+1)
@@ -335,7 +370,7 @@ func show_status():
 		var hint:="F — сесть за руль" if distance<=3 else "Машина · %d м" % distance
 		if not foreign.is_empty():
 			hint="F — сесть в машину рядом"
-		hud.text="ПЕШКОМ   ·   "+hint+"\nWASD / стрелки — идти   ·   Shift — бег   ·   ПКМ + мышь — обзор"
+		hud.text="ПЕШКОМ   ·   "+hint+"\nWASD / стрелки — идти   ·   Shift — бег   ·   мышь — обзор"
 		return
 	if free_drive:
 		hud.text="СВОБОДНАЯ ПОЕЗДКА    /    %s     ·     %d км/ч    ·    F — выйти" % [District.district_name(car.position),roundi(absf(speed)*3.6)]
@@ -365,7 +400,7 @@ func _physics_process(dt):
 	var gas := int(Input.is_physical_key_pressed(KEY_W) or Input.is_action_pressed("ui_up")) - int(Input.is_physical_key_pressed(KEY_S) or Input.is_action_pressed("ui_down"))
 	var steer := int(Input.is_physical_key_pressed(KEY_A) or Input.is_action_pressed("ui_left")) - int(Input.is_physical_key_pressed(KEY_D) or Input.is_action_pressed("ui_right"))
 	if driver.walking:
-		driver.walk(dt,steer,gas,people,camera)
+		driver.walk(dt,steer,gas,people,camera,orbit_pitch,orbit_zoom)
 		show_status()
 		if chapter==0 and stage>0 and not free_drive:
 			pursue(dt)
@@ -395,8 +430,16 @@ func _physics_process(dt):
 		speed *= 0.8
 	if people.vehicle_contacts(car,speed) and free_drive:
 		streets.report(self)
-	camera.position = camera.position.lerp(car.position+car.basis.z*10+Vector3.UP*6,1-exp(-5*dt))
-	camera.look_at(car.position-car.basis.z*3+Vector3.UP)
+	var focus:=car.position+Vector3.UP*1.45
+	var boom:=Vector3(0,sin(orbit_pitch),cos(orbit_pitch)).rotated(Vector3.UP,car.rotation.y+orbit_yaw)
+	var desired:=focus+boom*7.8*orbit_zoom
+	var ray:=PhysicsRayQueryParameters3D.create(focus,desired,1,[car.get_rid()])
+	var obstruction:=get_world_3d().direct_space_state.intersect_ray(ray)
+	if not obstruction.is_empty():
+		desired=obstruction.position+obstruction.normal*0.18
+	camera.position=camera.position.lerp(desired,1-exp(-11*dt))
+	if camera.position.distance_to(focus)>0.1:
+		camera.look_at(focus)
 	if car.position.x<District.WEST or car.position.x>District.EAST or car.position.z<District.NORTH or car.position.z>District.SOUTH:
 		if free_drive:
 			car.position=Vector3(0,0,0)
