@@ -47,9 +47,9 @@ func switch_seat(car: CharacterBody3D, speed: float):
 			show()
 			return
 
-func walk(dt: float, horizontal: float, forward: float, people, camera: Camera3D, pitch: float, zoom: float):
+func walk(dt: float, horizontal: float, forward: float, people, camera: Camera3D, pitch: float, zoom: float, can_sprint: bool):
 	var direction:=Vector3(-horizontal,0,-forward).rotated(Vector3.UP,heading).limit_length(1)
-	var pace:=6.1 if Input.is_physical_key_pressed(KEY_SHIFT) else 3.4
+	var pace:=6.1 if can_sprint and Input.is_physical_key_pressed(KEY_SHIFT) else 3.4
 	velocity=direction*pace
 	move_and_slide()
 	position.x=clampf(position.x,District.WEST,District.EAST)

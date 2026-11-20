@@ -14,6 +14,9 @@ func _draw():
 		draw_line(project_point(Vector3(x,0,District.NORTH)),project_point(Vector3(x,0,District.SOUTH)),Color("#54647b"),3)
 	for z in District.STREETS:
 		draw_line(project_point(Vector3(District.WEST,0,z)),project_point(Vector3(District.EAST,0,z)),Color("#54647b"),3)
+	for i in city.shops.LOCATIONS.size():
+		var marker_pos:=project_point(city.shops.LOCATIONS[i])
+		draw_string(ThemeDB.fallback_font,marker_pos,["Е","К","О"][i],HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("#9fe7a6"))
 	if city.marker.visible:
 		draw_circle(project_point(city.marker.position),4,Color("#ffbe65"))
 	if city.fork:

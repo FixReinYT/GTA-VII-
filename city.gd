@@ -8,6 +8,7 @@ var people := preload("res://sidewalk.gd").new()
 var driver:=preload("res://driver.gd").new()
 var streets:=preload("res://streets.gd").new()
 var masonry:=ShaderMaterial.new()
+var shops:=preload("res://shops.gd").new()
 var free_drive := false
 var steering := 0.0
 var reverse_delay := 0.0
@@ -78,10 +79,15 @@ var orbit_pitch := 0.32
 var orbit_zoom := 1.0
 
 func sync_cursor():
-	var playing := pending.is_empty() and not get_tree().paused and get_window().has_focus()
+	var playing := pending.is_empty() and shops.shop<0 and not get_tree().paused and get_window().has_focus()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if playing else Input.MOUSE_MODE_VISIBLE
 
 func _input(event):
+	if shops.shop>=0:
+		if event.is_action_pressed("ui_cancel"):
+			shops.close()
+			get_viewport().set_input_as_handled()
+		return
 	if not pending.is_empty() or get_tree().paused:
 		return
 	if event is InputEventMouseMotion:
@@ -92,15 +98,26 @@ func _input(event):
 			orbit_yaw=wrapf(orbit_yaw-offset.x,-PI,PI)
 		orbit_pitch=clampf(orbit_pitch+offset.y,-0.06,1.05)
 	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index==MOUSE_BUTTON_LEFT and driver.walking:
+			shops.attack()
 		if event.button_index==MOUSE_BUTTON_WHEEL_UP:
 			orbit_zoom=maxf(0.60,orbit_zoom-0.10)
 		elif event.button_index==MOUSE_BUTTON_WHEEL_DOWN:
 			orbit_zoom=minf(1.55,orbit_zoom+0.10)
 
 func _exit_tree():
+	if is_instance_valid(shops) and not shops.profile.is_empty() and is_instance_valid(streets):
+		streets.save_wallet()
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 
 func _unhandled_key_input(event):
+	if shops.shop>=0:
+		return
+	if pending=="" and driver.walking and event is InputEventKey and event.pressed and not event.echo:
+		match event.physical_keycode:
+			KEY_E: shops.open()
+			KEY_1: shops.select_weapon(false)
+			KEY_2: shops.select_weapon(true)
 	if event is InputEventKey and event.physical_keycode==KEY_F and event.pressed and not event.echo and pending=="" and not people.boarding:
 		var was_walking:=driver.walking
 		var target:Dictionary={}
@@ -253,6 +270,8 @@ func _ready():
 	driver.setup(people)
 	add_child(streets)
 	streets.setup(self)
+	add_child(shops)
+	shops.setup(self)
 	var avenue:=preload("res://avenue.gd").new()
 	add_child(avenue)
 	avenue.setup(self)
@@ -370,7 +389,11 @@ func show_status():
 		var hint:="F — сесть за руль" if distance<=3 else "Машина · %d м" % distance
 		if not foreign.is_empty():
 			hint="F — сесть в машину рядом"
-		hud.text="ПЕШКОМ   ·   "+hint+"\nWASD / стрелки — идти   ·   Shift — бег   ·   мышь — обзор"
+		var vendor:=shops.nearest(driver.position)
+		if vendor>=0:
+			hint="E — "+shops.NAMES[vendor]
+		hint+="    ·    "+("Пистолет · %d" % shops.profile.ammo if shops.equipped else "Кулаки")+"    ·    Силы %d" % roundi(shops.profile.energy)
+		hud.text="ПЕШКОМ   ·   "+hint+"\nWASD / стрелки — идти   ·   Shift — бег   ·   ЛКМ — удар / выстрел   ·   1 / 2 — смена"
 		return
 	if free_drive:
 		hud.text="СВОБОДНАЯ ПОЕЗДКА    /    %s     ·     %d км/ч    ·    F — выйти" % [District.district_name(car.position),roundi(absf(speed)*3.6)]
@@ -386,6 +409,8 @@ func needs_stop() -> bool:
 	return stage==Story.ROUTES[chapter].size()-1 or (chapter==0 and stage==0) or (chapter==1 and stage==2) or (chapter==2 and stage in [1,2])
 
 func _physics_process(dt):
+	if shops.shop>=0:
+		return
 	if Input.is_physical_key_pressed(KEY_R):
 		get_tree().reload_current_scene.call_deferred()
 		return
@@ -400,7 +425,10 @@ func _physics_process(dt):
 	var gas := int(Input.is_physical_key_pressed(KEY_W) or Input.is_action_pressed("ui_up")) - int(Input.is_physical_key_pressed(KEY_S) or Input.is_action_pressed("ui_down"))
 	var steer := int(Input.is_physical_key_pressed(KEY_A) or Input.is_action_pressed("ui_left")) - int(Input.is_physical_key_pressed(KEY_D) or Input.is_action_pressed("ui_right"))
 	if driver.walking:
-		driver.walk(dt,steer,gas,people,camera,orbit_pitch,orbit_zoom)
+		driver.walk(dt,steer,gas,people,camera,orbit_pitch,orbit_zoom,shops.profile.energy>0.0)
+		if driver.velocity.length()>4:
+			shops.profile.energy=maxf(0,shops.profile.energy-dt*2.0)
+		shops.pose(dt)
 		show_status()
 		if chapter==0 and stage>0 and not free_drive:
 			pursue(dt)

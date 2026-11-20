@@ -6,7 +6,7 @@ func run():
 	add_child(city)
 	await get_tree().physics_frame
 	city.set_physics_process(false)
-	if not check_street_behaviour(city):
+	if not check_shops(city) or not check_street_behaviour(city):
 		get_tree().quit(1)
 		return
 	for free in [false,true]:
@@ -169,4 +169,55 @@ func check_street_behaviour(city)->bool:
 	walker.last=-1
 	walker.fright=0.0
 	print("PASS curb wait, crossing, evasive step and traffic braking")
+	return true
+
+func check_shops(city)->bool:
+	city.begin_chapter(0)
+	city.advance_card()
+	city.driver.switch_seat(city.car,0)
+	var shops=city.shops
+	var original_cash:int=city.streets.money
+	var original:Dictionary=shops.profile.duplicate(true)
+	city.streets.money=120
+	shops.profile.merge({"gun":false,"ammo":0,"coat":2,"coats":[],"energy":20},true)
+	for index in 3:
+		city.driver.position=shops.LOCATIONS[index]
+		shops.open()
+		if shops.shop!=index or not shops.panel.visible:
+			return false
+		shops.buy(0)
+		shops.close()
+	if city.streets.money!=36 or shops.profile.energy!=45 or shops.profile.coat!=0 or not shops.equipped:
+		return false
+	var victim:Dictionary=city.people.walkers.back()
+	var home:Vector3=victim.body.position
+	city.driver.position=Vector3.ZERO
+	city.car.position=Vector3(22,0,0)
+	city.driver.heading=0
+	victim.body.position=Vector3.FORWARD*1.2
+	victim.body.show()
+	shops.select_weapon(false)
+	shops.attack()
+	if victim.down<=0:
+		return false
+	shops.select_weapon(true)
+	shops.cool=0
+	victim.down=0.0
+	victim.body.position=Vector3.FORWARD*4
+	shops.attack()
+	var cfg:=ConfigFile.new()
+	if victim.down<=0 or cfg.load("user://taxi.cfg")!=OK or cfg.get_value("gear","ammo")!=11 or cfg.get_value("driver","cash")!=36:
+		return false
+	for key in original:
+		shops.profile[key]=original[key]
+	city.streets.money=original_cash
+	city.streets.save_wallet()
+	shops.select_weapon(false)
+	shops.dress()
+	victim.body.position=home
+	victim.body.rotation.x=0.0
+	for npc in city.people.walkers:
+		npc.fright=0.0
+	victim.down=0.0
+	print("PASS shop entry, purchases, clothing, energy, punch, shot and saved inventory")
 	return true

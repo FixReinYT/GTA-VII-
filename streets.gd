@@ -14,7 +14,8 @@ var tracks:Array[Vector3]=[]
 var dispatch:=Label.new()
 var fare:=0
 var trips:=0
-var money:=0
+var money:=75
+var profile:={"gun":false,"ammo":0,"coat":2,"coats":[],"energy":70.0}
 var customer:Dictionary
 var stop:=Node3D.new()
 var destination:=Vector3.ZERO
@@ -24,6 +25,8 @@ func setup(city):
 	if cfg.load("user://taxi.cfg")==OK:
 		money=int(cfg.get_value("driver","cash",0))
 		trips=int(cfg.get_value("driver","trips",0))
+		for key in profile.keys():
+			profile[key]=cfg.get_value("gear",key,profile[key])
 	for i in 20:
 		var body:=StaticBody3D.new()
 		add_child(body)
@@ -187,10 +190,7 @@ func tick(city,dt:float):
 				money+=45
 				trips+=1
 				end_fare()
-				var cfg:=ConfigFile.new()
-				cfg.set_value("driver","cash",money)
-				cfg.set_value("driver","trips",trips)
-				cfg.save("user://taxi.cfg")
+				save_wallet()
 	elif active_model=="car_taxi" and not city.driver.walking:
 		dispatch.text+="   T — заказ такси"
 	dispatch.text+="   $%d" % money
@@ -202,3 +202,11 @@ func lane_gap(origin:Vector3,direction:Vector3,point:Vector3)->float:
 	if ahead>0 and ahead<18 and absf(relative.cross(direction).y)<1.65:
 		return ahead
 	return 100.0
+
+func save_wallet():
+	var cfg:=ConfigFile.new()
+	cfg.set_value("driver","cash",money)
+	cfg.set_value("driver","trips",trips)
+	for key in profile:
+		cfg.set_value("gear",key,profile[key])
+	cfg.save("user://taxi.cfg")
