@@ -23,4 +23,13 @@ func run():
 	current_scene.camera.position=Vector3(3,2.7,-16)
 	current_scene.camera.look_at(Vector3(-9.7,2,-24))
 	await picture("build/Laundry.jpg")
+	current_scene.camera.position=Vector3(11.0,1.85,-24.8)
+	current_scene.camera.look_at(Vector3(18.3,1.25,-24.0))
+	await picture("build/Cafe.jpg")
+	current_scene.radar.expanded=true
+	current_scene.radar.position=Vector2(60,32)
+	current_scene.radar.move_to_front()
+	current_scene.radar.queue_redraw()
+	await process_frame
+	await picture("build/Map.jpg")
 	quit()

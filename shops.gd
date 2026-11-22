@@ -1,6 +1,6 @@
 extends Node3D
 
-const LOCATIONS := [Vector3(8.7,0,-22),Vector3(-8.7,0,-58),Vector3(72.7,0,-114)]
+const LOCATIONS := [Vector3(16.6,0,-24),Vector3(-8.7,0,-58),Vector3(72.7,0,-114)]
 const NAMES := ["Полярная закусочная","Куртки Крус","Оружейная лавка"]
 const SIGNS := ["POLAR GRILL","CRUZ OUTFITTERS","LAKE CITY ARMS"]
 const COLORS := ["bf6249","49867d","676b89"]
@@ -23,7 +23,8 @@ var alternate:=false
 func setup(world):
 	city=world
 	profile=city.streets.profile
-	for i in LOCATIONS.size():
+	build_cafe()
+	for i in range(1,LOCATIONS.size()):
 		var booth:=Node3D.new()
 		add_child(booth)
 		booth.position=LOCATIONS[i]
@@ -198,3 +199,38 @@ func pose(dt:float):
 	elif swing>0:
 		var hand:Node3D=city.driver.avatar.limbs[2 if alternate else 3]
 		hand.rotation.x=sin(PI*swing/0.24)*1.8
+
+func build_cafe():
+	var room:=Node3D.new()
+	add_child(room)
+	room.position=Vector3(10,0,-24)
+	city.map_shapes.append({"p":Vector2(15,-24),"s":Vector2(10,10),"c":Color("#c19d70")})
+	city.block(room,Vector3(5,-0.05,0),Vector3(10,0.1,10),"bcad96",true)
+	for side in [-1,1]:
+		city.block(room,Vector3(5,2,side*5),Vector3(10,4,0.18),"74594b",true)
+		city.block(room,Vector3(0,1.58,side*3.1),Vector3(0.2,3.16,3.8),"526875",true)
+	city.block(room,Vector3(10,2,0),Vector3(0.18,4,10),"755b4d",true)
+	city.block(room,Vector3(5,4,0),Vector3(10.6,0.24,10.6),"b0a99f",true)
+	city.block(room,Vector3(0,3.56,0),Vector3(0.24,0.75,10),"a54d3e",true)
+	var sign:=Label3D.new()
+	room.add_child(sign)
+	sign.position=Vector3(-0.16,3.56,0)
+	sign.rotation.y=-PI/2
+	sign.text="P O L A R   G R I L L"
+	sign.pixel_size=0.009
+	sign.font_size=62
+	city.block(room,Vector3(8,0.6,0),Vector3(0.9,1.2,5),"56423b",true)
+	var seller:Dictionary=city.people.person(2,Vector3.ZERO)
+	seller.body.reparent(room,false)
+	seller.body.position=Vector3(9,0,0)
+	seller.body.rotation.y=PI/2
+	for z in [-3.4,3.4]:
+		city.block(room,Vector3(3.5,0.70,z),Vector3(1.6,0.16,1.1),"af835e",true)
+		for x in [2,5]:
+			city.block(room,Vector3(x,0.32,z),Vector3(0.55,0.64,1.3),"8f4c45",true)
+	var light:=OmniLight3D.new()
+	room.add_child(light)
+	light.position=Vector3(5,3,0)
+	light.light_color=Color("ffd49e")
+	light.light_energy=2.4
+	light.omni_range=9

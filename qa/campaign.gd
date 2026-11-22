@@ -6,7 +6,7 @@ func run():
 	add_child(city)
 	await get_tree().physics_frame
 	city.set_physics_process(false)
-	if not check_shops(city) or not check_street_behaviour(city):
+	if not check_cafe(city) or not check_shops(city) or not check_street_behaviour(city):
 		get_tree().quit(1)
 		return
 	for free in [false,true]:
@@ -221,3 +221,38 @@ func check_shops(city)->bool:
 	victim.down=0.0
 	print("PASS shop entry, purchases, clothing, energy, punch, shot and saved inventory")
 	return true
+
+func check_cafe(city)->bool:
+	city.begin_chapter(0)
+	city.advance_card()
+	city.driver.switch_seat(city.car,0)
+	var vera=city.driver
+	vera.position=Vector3(8,0,-24)
+	vera.heading=-PI/2
+	for step in 8:
+		vera.walk(1.0/60,0,0,city.people,city.camera,0.3,1,true)
+	var key:=InputEventKey.new()
+	key.physical_keycode=KEY_SPACE
+	key.pressed=true
+	city._unhandled_key_input(key)
+	var peak:=0.0
+	for step in 90:
+		vera.walk(1.0/60,0,1,city.people,city.camera,0.3,1,true)
+		peak=maxf(peak,vera.position.y)
+	if peak<0.7 or not vera.is_on_floor() or vera.position.x<12:
+		return false
+	for step in 55:
+		vera.walk(1.0/60,0,1,city.people,city.camera,0.3,1,true)
+	key.physical_keycode=KEY_E
+	city._unhandled_key_input(key)
+	if city.shops.shop!=0:
+		return false
+	city.shops.close()
+	for step in 155:
+		vera.walk(1.0/60,0,-1,city.people,city.camera,0.3,1,true)
+	key.physical_keycode=KEY_M
+	city._unhandled_key_input(key)
+	var mapped:bool=city.radar.expanded and city.map_shapes.size()>100
+	city._unhandled_key_input(key)
+	print("CAFE WALKTHROUGH peak=",peak," exit=",vera.position.x," map=",mapped)
+	return vera.position.x<10 and mapped

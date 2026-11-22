@@ -9,6 +9,8 @@ var driver:=preload("res://driver.gd").new()
 var streets:=preload("res://streets.gd").new()
 var masonry:=ShaderMaterial.new()
 var shops:=preload("res://shops.gd").new()
+var map_shapes:Array[Dictionary]=[]
+var radar:=preload("res://radar.gd").new()
 var free_drive := false
 var steering := 0.0
 var reverse_delay := 0.0
@@ -51,6 +53,8 @@ func block(parent: Node3D, pos: Vector3, size: Vector3, color: String, solid := 
 	parent.add_child(mesh)
 	mesh.position = pos
 	if solid:
+		if parent==self and size.x>=3 and size.z>=2 and size.x<100:
+			map_shapes.append({"p":Vector2(pos.x,pos.z),"s":Vector2(size.x,size.z),"c":Color("#997b70")})
 		var wall := StaticBody3D.new()
 		parent.add_child(wall)
 		wall.position = pos
@@ -113,8 +117,15 @@ func _exit_tree():
 func _unhandled_key_input(event):
 	if shops.shop>=0:
 		return
+	if pending=="" and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode==KEY_M:
+		radar.expanded=not radar.expanded
+		radar.position=Vector2(60,32) if radar.expanded else Vector2(18,458)
+		radar.move_to_front()
+		get_viewport().set_input_as_handled()
+		return
 	if pending=="" and driver.walking and event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
+			KEY_SPACE: driver.jump()
 			KEY_E: shops.open()
 			KEY_1: shops.select_weapon(false)
 			KEY_2: shops.select_weapon(true)
@@ -187,7 +198,7 @@ func _ready():
 	world.environment.fog_light_color = Color("404e67")
 	world.environment.fog_density = 0.0028
 	add_child(world)
-	block(self,Vector3(32,-0.55,-92),Vector3(490,1,470),"d3e4eb")
+	block(self,Vector3(32,-0.55,-92),Vector3(490,1,470),"d3e4eb",true)
 	for x in District.AVENUES:
 		block(self,Vector3(x,-0.07,-92),Vector3(15,0.12,454),"455467")
 	for z in District.STREETS:
@@ -200,8 +211,11 @@ func _ready():
 		for z in range(-304,128,16):
 			if absi(x)%64 < 12 or District.near_street(z):
 				continue
+			if x==16 and z==-16:
+				continue
 			if x < -70 and (z > -196 and z < -40):
 				block(self,Vector3(x,1.3,z),Vector3(0.5,2.6,0.5),"594437")
+				map_shapes.append({"p":Vector2(x,z),"s":Vector2(5,5),"c":Color("#547967")})
 				var pine:=CylinderMesh.new()
 				pine.top_radius=0
 				pine.bottom_radius=2.5
@@ -229,6 +243,7 @@ func _ready():
 			var wall := StaticBody3D.new()
 			add_child(wall)
 			wall.position = Vector3(x,3,z)
+			map_shapes.append({"p":Vector2(x,z),"s":Vector2(10.5,10.5),"c":Color("#8796a4")})
 			var collider := CollisionShape3D.new()
 			var box := BoxShape3D.new()
 			box.size = Vector3(10.5,6,10.5)
@@ -290,7 +305,6 @@ func _ready():
 		vehicle(parked,"car_police" if location.x==-70 else "car_sedan")
 		parked.position=location
 		parked.rotation.y=1.0
-	var radar:=preload("res://radar.gd").new()
 	add_child(radar)
 	radar.position=Vector2(18,458)
 	radar.city=self
@@ -393,7 +407,7 @@ func show_status():
 		if vendor>=0:
 			hint="E — "+shops.NAMES[vendor]
 		hint+="    ·    "+("Пистолет · %d" % shops.profile.ammo if shops.equipped else "Кулаки")+"    ·    Силы %d" % roundi(shops.profile.energy)
-		hud.text="ПЕШКОМ   ·   "+hint+"\nWASD / стрелки — идти   ·   Shift — бег   ·   ЛКМ — удар / выстрел   ·   1 / 2 — смена"
+		hud.text="ПЕШКОМ   ·   "+hint+"\nWASD / стрелки — идти   ·   Shift — бег   ·   Пробел — прыжок · M — карта · ЛКМ — удар / выстрел   ·   1 / 2 — смена"
 		return
 	if free_drive:
 		hud.text="СВОБОДНАЯ ПОЕЗДКА    /    %s     ·     %d км/ч    ·    F — выйти" % [District.district_name(car.position),roundi(absf(speed)*3.6)]

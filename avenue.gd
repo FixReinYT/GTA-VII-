@@ -30,6 +30,7 @@ func storefront():
 	var shop:=Node3D.new()
 	add_child(shop)
 	shop.position=Vector3(-10.6,0,-24)
+	city.map_shapes.append({"p":Vector2(-13.8,-24),"s":Vector2(6,12),"c":Color("#b69376")})
 	shop.rotation.y=PI/2
 	city.block(shop,Vector3(0,2,-3.2),Vector3(12,4,6),"763f36",true)
 	piece(shop,Vector3(0,2.05,0),Vector3(12,4.1,0.32),"532f2b")
